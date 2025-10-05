@@ -24,6 +24,10 @@ around the same CLI so older instructions continue to work.
    scope. You can generate one through the EVE Online SSO flow. Save the token
    as an environment variable named `ESI_ACCESS_TOKEN`.
 
+   > Tokens expire roughly every 20 minutes. If the script starts returning
+   > `401 Unauthorized`, repeat the SSO flow to obtain a fresh token before
+   > trying again.
+
 ### Example usage
 
 Fetch the first page of market orders from Jita 4-4 and pretty-print them to
@@ -42,3 +46,11 @@ python scripts/fetch_structure_orders.py --output jita_orders.json
 
 To query a different structure, pass the appropriate structure identifier via
 `--structure-id`.
+
+### Troubleshooting
+
+If the helper exits with `Failed to query ESI: 401 Client Error: Unauthorized`,
+it means the request reached ESI without a valid token. Export the
+`ESI_ACCESS_TOKEN` environment variable (or use `--access-token`) with a freshly
+generated token that includes the `esi-markets.structure_markets.v1` scope, then
+re-run the command.

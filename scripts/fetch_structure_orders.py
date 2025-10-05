@@ -76,6 +76,23 @@ def fetch_structure_orders(
         url = f"{ESI_BASE_URL}{MARKET_STRUCTURE_PATH}".format(structure_id=structure_id)
         response = http.get(url, params=params, headers=headers, timeout=30)
 
+        if response.status_code == 401:
+            message = [
+                "ESI rejected the request as unauthorized. ",
+            ]
+            if not access_token:
+                message.append(
+                    "No access token was provided; export the ESI_ACCESS_TOKEN "
+                    "environment variable or supply --access-token."
+                )
+            else:
+                message.append(
+                    "Access tokens expire quickly and must include the "
+                    "'esi-markets.structure_markets.v1' scope. Generate a fresh "
+                    "token through EVE SSO and try again."
+                )
+            raise ESIError("".join(message))
+
         if response.status_code == 403:
             raise ESIError(
                 "Access to the structure market endpoint was denied. "
