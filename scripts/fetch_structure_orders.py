@@ -39,6 +39,44 @@ def _build_headers(access_token: Optional[str]) -> Mapping[str, str]:
     return headers
 
 
+def _extract_error_details(response: Optional[requests.Response]) -> str:
+    """Return a human-friendly description of an error response."""
+
+    if response is None:
+        return "No response payload was returned by requests"
+
+    request_id = response.headers.get("X-Esi-Request-Id")
+
+    detail: Optional[str] = None
+    try:
+        payload = response.json()
+    except ValueError:
+        payload = None
+
+    if isinstance(payload, Mapping):
+        maybe_error = payload.get("error")
+        if isinstance(maybe_error, str) and maybe_error.strip():
+            detail = maybe_error.strip()
+        elif payload:
+            detail = json.dumps(payload, ensure_ascii=False)
+    else:
+        text = response.text.strip()
+        if text:
+            detail = text
+
+    pieces = [
+        f"HTTP {response.status_code} {response.reason}",
+    ]
+
+    if request_id:
+        pieces.append(f"request-id={request_id}")
+
+    if detail:
+        pieces.append(f"details={detail}")
+
+    return "; ".join(pieces)
+
+
 def fetch_structure_orders(
     structure_id: int,
     access_token: Optional[str] = None,
@@ -77,26 +115,14 @@ def fetch_structure_orders(
         response = http.get(url, params=params, headers=headers, timeout=30)
 
         if response.status_code == 400:
-            # 400 responses usually indicate a malformed or expired token even
-            # though the structure ID itself is valid. Surface the message from
-            # ESI so the user knows what went wrong.
-            error_detail = None
-            try:
-                payload = response.json()
-                if isinstance(payload, Mapping):
-                    error_detail = payload.get("error")
-            except ValueError:
-                error_detail = response.text.strip() or None
-
-            if not error_detail:
-                error_detail = "Bad request"
-
             raise ESIError(
-                "ESI rejected the request (HTTP 400). "
-                f"Details: {error_detail}. "
-                "This typically happens when the authorization code has "
-                "already been redeemed or the access token has expired. "
-                "Generate a fresh token and retry the request."
+                "ESI rejected the request. "
+                f"{_extract_error_details(response)}. "
+                "This usually means the authorization code was already "
+                "consumed or the access token has expired. Request a new "
+                "authorization code, exchange it for a fresh token, and then "
+                "invoke this script with either the ESI_ACCESS_TOKEN "
+                "environment variable set or the --access-token flag."
             )
 
         if response.status_code == 401:
@@ -133,7 +159,10 @@ def fetch_structure_orders(
         try:
             response.raise_for_status()
         except requests.HTTPError as exc:  # pragma: no cover - defensive
-            raise ESIError(f"Failed to query ESI: {exc}") from exc
+            raise ESIError(
+                "Failed to query ESI: "
+                f"{_extract_error_details(exc.response)}"
+            ) from exc
 
         try:
             page_orders = response.json()
