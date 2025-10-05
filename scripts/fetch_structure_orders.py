@@ -76,6 +76,29 @@ def fetch_structure_orders(
         url = f"{ESI_BASE_URL}{MARKET_STRUCTURE_PATH}".format(structure_id=structure_id)
         response = http.get(url, params=params, headers=headers, timeout=30)
 
+        if response.status_code == 400:
+            # 400 responses usually indicate a malformed or expired token even
+            # though the structure ID itself is valid. Surface the message from
+            # ESI so the user knows what went wrong.
+            error_detail = None
+            try:
+                payload = response.json()
+                if isinstance(payload, Mapping):
+                    error_detail = payload.get("error")
+            except ValueError:
+                error_detail = response.text.strip() or None
+
+            if not error_detail:
+                error_detail = "Bad request"
+
+            raise ESIError(
+                "ESI rejected the request (HTTP 400). "
+                f"Details: {error_detail}. "
+                "This typically happens when the authorization code has "
+                "already been redeemed or the access token has expired. "
+                "Generate a fresh token and retry the request."
+            )
+
         if response.status_code == 401:
             message = [
                 "ESI rejected the request as unauthorized. ",

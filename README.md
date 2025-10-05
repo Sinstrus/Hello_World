@@ -54,3 +54,8 @@ it means the request reached ESI without a valid token. Export the
 `ESI_ACCESS_TOKEN` environment variable (or use `--access-token`) with a freshly
 generated token that includes the `esi-markets.structure_markets.v1` scope, then
 re-run the command.
+
+If you see `Error: ESI rejected the request (HTTP 400)`, the token exchange was
+reused or the access token expired before the script could call the endpoint.
+Return to the OAuth authorize URL, copy the new `code=` value, exchange it for a
+fresh access token, and try again.
