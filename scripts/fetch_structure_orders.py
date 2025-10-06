@@ -6,7 +6,10 @@ minimal to make it easier to extend for future automation tasks.
 
 Example usages::
 
-    # Fetch the first page of orders from the public NPC station in Jita 4-4
+    # Export an ESI token (required for both station and structure queries)
+    export ESI_ACCESS_TOKEN="<your access token>"
+
+    # Fetch the first page of orders from the NPC station in Jita 4-4
     python scripts/fetch_structure_orders.py --max-pages 1 --pretty --output -
 
     # Query an Upwell structure (requires a token with the
@@ -99,11 +102,11 @@ def fetch_structure_orders(
         The Upwell structure identifier whose orders should be fetched. Requires
         an OAuth2 token with the ``esi-markets.structure_markets.v1`` scope.
     station_id:
-        Identifier of an NPC station to query. NPC station requests are public
-        and ignore ``access_token``.
+        Identifier of an NPC station to query. NPC station requests also require
+        an OAuth2 token with the ``esi-markets.structure_markets.v1`` scope.
     access_token:
         OAuth2 access token with the ``esi-markets.structure_markets.v1`` scope.
-        Required for structure queries; ignored for NPC station requests.
+        Required for both structure and station queries.
     max_pages:
         Optional limit on the number of ESI pages to retrieve. Useful when
         testing to avoid large downloads.
@@ -123,7 +126,7 @@ def fetch_structure_orders(
         endpoint_label = "structure"
     else:
         endpoint_path = MARKET_STATION_PATH.format(station_id=station_id)
-        headers = _build_headers(None)
+        headers = _build_headers(access_token)
         endpoint_label = "station"
 
     orders: List[Mapping[str, object]] = []
@@ -287,29 +290,25 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
 
     structure_id = args.structure_id
     station_id = args.station_id
-    env_token = os.environ.get("ESI_ACCESS_TOKEN")
-
     if structure_id is None and station_id is None:
         station_id = DEFAULT_STATION_ID
 
-    if structure_id is not None and not args.access_token:
-        print(
-            "Warning: No access token provided. The structure market endpoint "
-            "requires an authenticated request. Set the ESI_ACCESS_TOKEN "
-            "environment variable or use --access-token.",
-            file=sys.stderr,
-        )
-    elif (
-        structure_id is None
-        and station_id is not None
-        and args.access_token
-        and args.access_token != env_token
-    ):
-        print(
-            "Note: --access-token is ignored for NPC station queries; the "
-            "endpoint is public.",
-            file=sys.stderr,
-        )
+    if not args.access_token:
+        if structure_id is not None:
+            print(
+                "Warning: No access token provided. The structure market "
+                "endpoint requires an authenticated request. Set the "
+                "ESI_ACCESS_TOKEN environment variable or use --access-token.",
+                file=sys.stderr,
+            )
+        elif station_id is not None:
+            print(
+                "Warning: No access token provided. ESI now requires "
+                "authentication for NPC station market queries as well. "
+                "Set the ESI_ACCESS_TOKEN environment variable or use "
+                "--access-token.",
+                file=sys.stderr,
+            )
 
     try:
         orders = fetch_structure_orders(
